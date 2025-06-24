@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y \
     gcc g++ make cmake \
     libopenblas-dev liblapack-dev \
     libgl1-mesa-glx libglib2.0-0 libsm6 libxext6 libxrender-dev \
-    libgomp1 libgthread-2.0-0 \
+    libgomp1 \
     poppler-utils curl wget \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
@@ -25,14 +25,13 @@ RUN pip install --no-cache-dir \
     opencv-python-headless==4.8.1.78 \
     Pillow==10.0.1
 
-# PaddlePaddle 3.0 compatible
+# PaddlePaddle 3.0 estable
 RUN pip install --no-cache-dir \
-    https://paddle-wheel.bj.bcebos.com/3.0.0-beta2/linux/linux-cpu-mkl-avx/paddlepaddle-3.0.0b2-cp310-cp310-linux_x86_64.whl
+    paddlepaddle==3.0.0b1
 
-# PaddleOCR 3.0 desde fuente más reciente
+# PaddleOCR 3.0 compatible  
 RUN pip install --no-cache-dir \
-    paddleocr==3.0.1 \
-    paddlex==3.0.0b2
+    paddleocr==3.0.1
 
 # Otras dependencias
 RUN pip install --no-cache-dir \
