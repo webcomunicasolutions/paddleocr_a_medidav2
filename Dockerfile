@@ -22,14 +22,8 @@ RUN pip install --no-cache-dir \
 # Copiar código
 COPY . /app/
 
-# Pre-descargar modelos
-RUN python -c "
-from paddleocr import PaddleOCR
-print('Descargando modelos...')
-PaddleOCR(lang='en', use_gpu=False, show_log=False)
-PaddleOCR(lang='es', use_gpu=False, show_log=False)
-print('Modelos listos!')
-"
+# Pre-descargar modelos (CORREGIDO)
+RUN python3 -c "from paddleocr import PaddleOCR; print('Descargando modelos...'); PaddleOCR(lang='en', use_gpu=False, show_log=False); PaddleOCR(lang='es', use_gpu=False, show_log=False); print('Modelos listos!')"
 
 # Crear directorios
 RUN mkdir -p /app/data/input /app/data/output
