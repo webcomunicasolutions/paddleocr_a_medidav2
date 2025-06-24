@@ -12,21 +12,24 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Instalar Python packages
+# Instalar Python packages con versiones específicas compatibles
 RUN pip install --no-cache-dir \
+    numpy==1.24.3 \
+    opencv-python-headless==4.8.1.78 \
     paddlepaddle==2.6.1 \
     paddleocr==2.7.3 \
     pdf2image==1.17.0 \
-    flask==3.0.0
+    flask==3.0.0 \
+    Pillow==10.0.1
 
 # Copiar código
 COPY . /app/
 
-# Pre-descargar modelos (CORREGIDO)
-RUN python3 -c "from paddleocr import PaddleOCR; print('Descargando modelos...'); PaddleOCR(lang='en', use_gpu=False, show_log=False); PaddleOCR(lang='es', use_gpu=False, show_log=False); print('Modelos listos!')"
-
 # Crear directorios
-RUN mkdir -p /app/data/input /app/data/output
+RUN mkdir -p /app/data/input /app/data/output /opt/paddle_models
+
+# NO pre-descargamos modelos aquí para evitar conflictos
+# Los modelos se descargarán en el primer uso
 
 EXPOSE 8501
 HEALTHCHECK --interval=30s --timeout=10s --start-period=120s \
