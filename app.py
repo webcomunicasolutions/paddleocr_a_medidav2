@@ -204,7 +204,7 @@ def analyze_text_orientations(coordinates_list):
 
 def process_ocr_result_hybrid(ocr_result):
     """
-    Procesamiento híbrido que funciona con diferentes formatos de resultado
+    Procesamiento SIMPLE para resultado de .ocr() solamente
     """
     text_lines = []
     confidences = []
@@ -214,7 +214,7 @@ def process_ocr_result_hybrid(ocr_result):
         return text_lines, confidences, coordinates_list
     
     try:
-        # MÉTODO 1: Formato estándar de .ocr()
+        # Formato estándar de .ocr(): [página][bloque][coordenadas, (texto, confianza)]
         for page_result in ocr_result:
             if not page_result:
                 continue
@@ -237,20 +237,6 @@ def process_ocr_result_hybrid(ocr_result):
                 except Exception as e:
                     print(f"⚠️ Error procesando palabra: {e}")
                     continue
-        
-        # Si no encontramos nada, intentar formato de .predict()
-        if not text_lines and ocr_result:
-            try:
-                page_result = ocr_result[0]
-                if isinstance(page_result, dict):
-                    if 'rec_texts' in page_result:
-                        text_lines = page_result['rec_texts']
-                    if 'rec_scores' in page_result:
-                        confidences = page_result['rec_scores']
-                    if 'dt_polys' in page_result:
-                        coordinates_list = page_result['dt_polys']
-            except:
-                pass
                     
     except Exception as e:
         print(f"⚠️ Error procesando resultado OCR: {e}")
@@ -320,7 +306,7 @@ def process_file():
                         except:
                             print(f"⚠️ No se pudo actualizar side_len, usando default")
                         
-                        # OCR con detección de ángulos
+                        # OCR con detección de ángulos - ARREGLADO
                         result = ocr.ocr(img_tmp.name, cls=True)
                         os.remove(img_tmp.name)
                 else:
