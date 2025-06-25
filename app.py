@@ -31,7 +31,6 @@ def initialize_ocr():
         print("🚀 Inicializando PaddleOCR (configuración SIMPLE)...")
         from paddleocr import PaddleOCR
         
-        # MANTENER configuración simple que ya funciona
         ocr_instances["es"] = PaddleOCR(lang='es')
         ocr_instances["en"] = PaddleOCR(lang='en')
         
@@ -55,77 +54,98 @@ def get_ocr_instance(language=None):
     lang = language or default_lang
     return ocr_instances.get(lang, ocr_instances.get("es"))
 
-def extract_text_improved(ocr_result):
+def debug_ocr_result(ocr_result):
     """
-    PASO 1: Mejorar la extracción de texto sin cambiar configuración OCR
-    Solo mejoramos cómo procesamos los resultados que ya funcionan
+    DEBUG: Imprimir la estructura exacta que devuelve OCR
     """
-    if not ocr_result or not isinstance(ocr_result, list):
-        return {
-            'text': '',
-            'blocks': [],
-            'total_blocks': 0,
-            'confidences': []
-        }
+    print("\n" + "="*50)
+    print("🔍 DEBUG - Estructura OCR:")
+    print("="*50)
     
-    all_text_lines = []
-    text_blocks = []
-    confidences = []
+    print(f"Tipo de resultado: {type(ocr_result)}")
+    print(f"Es lista?: {isinstance(ocr_result, list)}")
+    
+    if ocr_result:
+        print(f"Longitud: {len(ocr_result)}")
+        
+        for i, item in enumerate(ocr_result):
+            print(f"\nItem {i}:")
+            print(f"  Tipo: {type(item)}")
+            print(f"  Es lista?: {isinstance(item, list)}")
+            
+            if isinstance(item, list):
+                print(f"  Longitud: {len(item)}")
+                
+                for j, subitem in enumerate(item[:3]):  # Solo primeros 3
+                    print(f"    SubItem {j}:")
+                    print(f"      Tipo: {type(subitem)}")
+                    
+                    if isinstance(subitem, list) and len(subitem) >= 2:
+                        print(f"      Longitud: {len(subitem)}")
+                        print(f"      Elem 0 (coords): {type(subitem[0])}")
+                        print(f"      Elem 1 (texto): {type(subitem[1])}")
+                        
+                        if len(subitem) > 1:
+                            texto_parte = subitem[1]
+                            print(f"      Texto parte tipo: {type(texto_parte)}")
+                            if isinstance(texto_parte, (list, tuple)):
+                                print(f"      Texto contenido: {texto_parte}")
+                            else:
+                                print(f"      Texto valor: {str(texto_parte)[:50]}")
+                
+                if len(item) > 3:
+                    print(f"    ... y {len(item)-3} elementos más")
+    
+    print("="*50 + "\n")
+    return ocr_result
+
+def extract_text_simple(ocr_result):
+    """
+    Extracción SIMPLE - probamos diferentes estructuras
+    """
+    all_text = []
+    
+    if not ocr_result:
+        return "Sin resultado OCR"
     
     try:
-        # Procesar el resultado del OCR
-        for page_result in ocr_result:
-            if not page_result:
-                continue
-                
-            for block in page_result:
-                try:
-                    # Estructura típica: [coordenadas, (texto, confianza)]
-                    if len(block) >= 2:
-                        coordinates = block[0] if len(block) > 0 else []
-                        text_info = block[1] if len(block) > 1 else ('', 0.0)
-                        
-                        # Extraer texto y confianza
-                        if isinstance(text_info, (list, tuple)) and len(text_info) >= 2:
-                            text = str(text_info[0]).strip()
-                            confidence = float(text_info[1]) if text_info[1] else 0.0
-                        else:
-                            text = str(text_info).strip()
-                            confidence = 1.0
-                        
-                        if text:  # Solo si hay texto
-                            all_text_lines.append(text)
-                            confidences.append(confidence)
+        # Estructura 1: Lista de páginas > lista de bloques > [coords, (texto, conf)]
+        if isinstance(ocr_result, list):
+            for page in ocr_result:
+                if isinstance(page, list):
+                    for block in page:
+                        if isinstance(block, list) and len(block) >= 2:
+                            texto_parte = block[1]
                             
-                            # Crear bloque básico con info adicional
-                            text_blocks.append({
-                                'text': text,
-                                'confidence': round(confidence, 3),
-                                'coordinates': coordinates
-                            })
+                            # Caso A: (texto, confianza)
+                            if isinstance(texto_parte, (list, tuple)) and len(texto_parte) >= 1:
+                                texto = str(texto_parte[0]).strip()
+                                if texto:
+                                    all_text.append(texto)
                             
-                except Exception as e:
-                    print(f"⚠️ Error procesando bloque: {e}")
-                    continue
-                    
+                            # Caso B: solo texto
+                            elif isinstance(texto_parte, str):
+                                texto = texto_parte.strip()
+                                if texto:
+                                    all_text.append(texto)
+        
+        # Si no encontramos nada, intentar estructura alternativa
+        if not all_text:
+            # Estructura 2: Intentar acceso directo
+            for item in ocr_result:
+                if isinstance(item, str):
+                    all_text.append(item)
+                elif hasattr(item, 'text'):
+                    all_text.append(str(item.text))
+    
     except Exception as e:
-        print(f"⚠️ Error general extrayendo texto: {e}")
+        print(f"❌ Error extrayendo texto: {e}")
+        return f"Error: {str(e)}"
     
-    # Texto combinado
-    combined_text = '\n'.join(all_text_lines)
-    
-    # Estadísticas básicas
-    avg_confidence = sum(confidences) / len(confidences) if confidences else 0.0
-    
-    return {
-        'text': combined_text,
-        'blocks': text_blocks,
-        'total_blocks': len(text_blocks),
-        'confidences': confidences,
-        'avg_confidence': round(avg_confidence, 3),
-        'min_confidence': round(min(confidences), 3) if confidences else 0.0,
-        'max_confidence': round(max(confidences), 3) if confidences else 0.0
-    }
+    if all_text:
+        return '\n'.join(all_text)
+    else:
+        return "No se pudo extraer texto - revisar estructura"
 
 @app.route('/health')
 def health():
@@ -157,7 +177,6 @@ def process_file():
             return jsonify({'error': 'Invalid file'}), 400
         
         language = request.form.get('language', default_lang)
-        detailed = request.form.get('detailed', 'false').lower() == 'true'
         
         ocr = get_ocr_instance(language)
         if ocr is None:
@@ -173,45 +192,38 @@ def process_file():
                 pages = convert_from_path(tmp_file.name, dpi=300, first_page=1, last_page=1)
                 with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as img_tmp:
                     pages[0].save(img_tmp.name, 'JPEG', quality=95)
-                    # CAMBIO: usar .ocr() en lugar de .predict() para más información
                     result = ocr.ocr(img_tmp.name)
                     os.remove(img_tmp.name)
             else:
-                # CAMBIO: usar .ocr() en lugar de .predict()
                 result = ocr.ocr(tmp_file.name)
             
             os.remove(tmp_file.name)
         
-        # CAMBIO: usar nuestra función mejorada de extracción
-        processed_result = extract_text_improved(result)
+        # DEBUG: Mostrar estructura en consola
+        debug_ocr_result(result)
         
-        # Respuesta básica
-        response = {
+        # Extraer texto con método simple
+        texto_extraido = extract_text_simple(result)
+        
+        return jsonify({
             'success': True,
-            'text': processed_result['text'],
-            'total_blocks': processed_result['total_blocks'],
-            'avg_confidence': processed_result['avg_confidence'],
+            'text': texto_extraido,
             'filename': filename,
-            'language': language
-        }
-        
-        # Si piden detalle, agregar más info
-        if detailed:
-            response.update({
-                'blocks': processed_result['blocks'],
-                'min_confidence': processed_result['min_confidence'],
-                'max_confidence': processed_result['max_confidence'],
-                'confidences': processed_result['confidences']
-            })
-        
-        return jsonify(response)
+            'language': language,
+            'raw_result_type': str(type(result)),
+            'raw_result_length': len(result) if result else 0,
+            'debug_info': 'Revisa la consola del servidor para ver la estructura completa'
+        })
         
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        import traceback
+        error_detail = traceback.format_exc()
+        print(f"❌ Error completo:\n{error_detail}")
+        return jsonify({'error': str(e), 'detail': error_detail}), 500
 
 if __name__ == '__main__':
     os.makedirs(UPLOAD_FOLDER, exist_ok=True)
     os.makedirs(OUTPUT_FOLDER, exist_ok=True)
-    print("🚀 PaddleOCR Simple Server iniciando...")
-    print("📈 PASO 1: Extracción mejorada de texto y confianza")
+    print("🚀 PaddleOCR DEBUG Server iniciando...")
+    print("🔍 Esta versión mostrará la estructura exacta del resultado OCR")
     app.run(host='0.0.0.0', port=8501, debug=False)
