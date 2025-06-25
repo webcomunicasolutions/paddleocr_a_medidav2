@@ -182,16 +182,20 @@ def process_file():
                         side_len = calculate_intelligent_side_len(img_tmp.name)
                         print(f"🔧 Usando side_len: {side_len}")
                         
-                        # SOLO .ocr() - SIN .predict()
-                        result = ocr.ocr(img_tmp.name, cls=True)
+                        # SOLO .ocr() - VERSIÓN MÍNIMA SIN cls
+                        print("🔧 Ejecutando OCR SIN cls...")
+                        result = ocr.ocr(img_tmp.name)  # SIN cls=True
+                        print(f"✅ OCR completado, resultado tipo: {type(result)}")
                         os.remove(img_tmp.name)
                 else:
                     # Para imágenes directas
                     side_len = calculate_intelligent_side_len(tmp_file.name)
                     print(f"🔧 Usando side_len: {side_len}")
                     
-                    # SOLO .ocr() - SIN .predict()
-                    result = ocr.ocr(tmp_file.name, cls=True)
+                    # SOLO .ocr() - VERSIÓN MÍNIMA SIN cls
+                    print("🔧 Ejecutando OCR para imagen SIN cls...")
+                    result = ocr.ocr(tmp_file.name)  # SIN cls=True
+                    print(f"✅ OCR completado, resultado tipo: {type(result)}")
                 
             finally:
                 os.remove(tmp_file.name)
