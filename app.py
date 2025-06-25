@@ -50,42 +50,77 @@ def initialize_ocr():
         print("🚀 Inicializando PaddleOCR con configuración híbrida...")
         from paddleocr import PaddleOCR
         
-        # ESTRATEGIA: Intentar v4 primero, fallback a configuración estable
+        # ESTRATEGIA: Configuración adaptativa por idioma
         for lang in supported_languages:
             print(f"📚 Cargando OCR para {lang.upper()}...")
             
-            try:
-                # INTENTO 1: Configuración avanzada como tu amigo
-                print(f"   🔄 Intentando configuración avanzada para {lang}...")
-                ocr_instances[lang] = PaddleOCR(
-                    lang=lang,
-                    use_angle_cls=True,
-                    use_textline_orientation=True,
-                    det_db_box_thresh=0.3,
-                    det_db_thresh=0.25,
-                    enable_mkldnn=True,
-                    use_gpu=False,
-                    show_log=False
-                )
-                print(f"   ✅ Configuración avanzada OK para {lang}")
-                
-            except Exception as e1:
-                print(f"   ⚠️ Configuración avanzada falló para {lang}: {e1}")
+            if lang == 'en':
+                # INGLÉS: Intentar v4 como tu amigo
                 try:
-                    # INTENTO 2: Configuración básica que sabemos que funciona
-                    print(f"   🔄 Fallback a configuración básica para {lang}...")
+                    print(f"   🔄 Intentando PP-OCRv4 para inglés...")
                     ocr_instances[lang] = PaddleOCR(
-                        lang=lang,
-                        use_angle_cls=True
+                        ocr_version='PP-OCRv4',
+                        det_model_dir='en_PP-OCRv4_server_det',
+                        rec_model_dir='en_PP-OCRv4_server_rec',
+                        cls_model_dir='ch_ppocr_server_v2.0_cls_infer',
+                        lang='en',
+                        use_angle_cls=True,
+                        use_textline_orientation=True,
+                        det_db_box_thresh=0.3,
+                        det_db_thresh=0.25,
+                        enable_mkldnn=True,
+                        use_gpu=False,
+                        show_log=False
                     )
-                    print(f"   ✅ Configuración básica OK para {lang}")
+                    print(f"   ✅ PP-OCRv4 OK para inglés")
                     
-                except Exception as e2:
-                    print(f"   ❌ También falló configuración básica para {lang}: {e2}")
-                    # INTENTO 3: Configuración mínima
-                    print(f"   🔄 Fallback a configuración mínima para {lang}...")
-                    ocr_instances[lang] = PaddleOCR(lang=lang)
-                    print(f"   ✅ Configuración mínima OK para {lang}")
+                except Exception as e1:
+                    print(f"   ⚠️ PP-OCRv4 falló para inglés: {e1}")
+                    try:
+                        # Fallback inglés v3
+                        print(f"   🔄 Fallback a v3 para inglés...")
+                        ocr_instances[lang] = PaddleOCR(
+                            lang='en',
+                            use_angle_cls=True,
+                            use_textline_orientation=True,
+                            det_db_box_thresh=0.3,
+                            det_db_thresh=0.25,
+                            enable_mkldnn=True,
+                            use_gpu=False
+                        )
+                        print(f"   ✅ Configuración v3 OK para inglés")
+                    except Exception as e2:
+                        print(f"   🔄 Configuración mínima para inglés...")
+                        ocr_instances[lang] = PaddleOCR(lang='en', use_angle_cls=True)
+                        print(f"   ✅ Configuración mínima OK para inglés")
+            
+            else:
+                # ESPAÑOL: Solo v3 (v4 no disponible)
+                try:
+                    print(f"   🔄 Configuración optimizada para español (v3)...")
+                    ocr_instances[lang] = PaddleOCR(
+                        lang='es',
+                        use_angle_cls=True,
+                        use_textline_orientation=True,
+                        det_db_box_thresh=0.3,
+                        det_db_thresh=0.25,
+                        enable_mkldnn=True,
+                        use_gpu=False,
+                        show_log=False
+                    )
+                    print(f"   ✅ Configuración optimizada OK para español")
+                    
+                except Exception as e1:
+                    print(f"   ⚠️ Configuración optimizada falló para español: {e1}")
+                    try:
+                        # Fallback español básico
+                        print(f"   🔄 Fallback básico para español...")
+                        ocr_instances[lang] = PaddleOCR(lang='es', use_angle_cls=True)
+                        print(f"   ✅ Configuración básica OK para español")
+                    except Exception as e2:
+                        print(f"   🔄 Configuración mínima para español...")
+                        ocr_instances[lang] = PaddleOCR(lang='es')
+                        print(f"   ✅ Configuración mínima OK para español")
         
         ocr_initialized = True
         print("✅ OCR inicializado exitosamente")
