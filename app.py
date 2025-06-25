@@ -1,7 +1,3 @@
-# Actualizar app.py con configuración simple
-cp /app/app.py /app/app.py.backup
-
-cat > /app/app_simple.py << 'EOF'
 #!/usr/bin/env python3
 import os
 import json
@@ -35,7 +31,6 @@ def initialize_ocr():
         print("🚀 Inicializando PaddleOCR (configuración SIMPLE)...")
         from paddleocr import PaddleOCR
         
-        # Configuración MÍNIMA que funciona
         ocr_instances["es"] = PaddleOCR(lang='es')
         ocr_instances["en"] = PaddleOCR(lang='en')
         
@@ -111,7 +106,6 @@ def process_file():
             
             os.remove(tmp_file.name)
         
-        # Extraer texto
         text_lines = []
         if result and isinstance(result, list) and len(result) > 0:
             page_result = result[0]
@@ -134,4 +128,3 @@ if __name__ == '__main__':
     os.makedirs(OUTPUT_FOLDER, exist_ok=True)
     print("🚀 PaddleOCR Simple Server iniciando...")
     app.run(host='0.0.0.0', port=8501, debug=False)
-EOF
