@@ -84,8 +84,9 @@ def process_file():
             return jsonify({'error': 'Invalid file'}), 400
         
         language = request.form.get('language', default_lang)
-        ocr = get_ocr_instance(language)
+        detailed = request.form.get('detailed', 'false').lower() == 'true'
         
+        ocr = get_ocr_instance(language)
         if ocr is None:
             return jsonify({'error': 'OCR not available'}), 503
         
@@ -99,41 +100,70 @@ def process_file():
                 pages = convert_from_path(tmp_file.name, dpi=300, first_page=1, last_page=1)
                 with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as img_tmp:
                     pages[0].save(img_tmp.name, 'JPEG', quality=95)
-                    # VOLVER AL MÉTODO QUE FUNCIONABA: .predict()
                     result = ocr.predict(img_tmp.name)
                     os.remove(img_tmp.name)
             else:
-                # VOLVER AL MÉTODO QUE FUNCIONABA: .predict()
                 result = ocr.predict(tmp_file.name)
             
             os.remove(tmp_file.name)
         
-        # VOLVER AL MÉTODO ORIGINAL que funcionaba, pero con pequeñas mejoras
+        # Extraer texto (método que funcionaba)
         text_lines = []
         if result and isinstance(result, list) and len(result) > 0:
             page_result = result[0]
             if 'rec_texts' in page_result:
                 text_lines = page_result['rec_texts']
         
-        # AGREGAMOS: también intentar extraer confianzas si están disponibles
+        # Extraer confianzas
         confidences = []
         if result and isinstance(result, list) and len(result) > 0:
             page_result = result[0]
             if 'rec_scores' in page_result:
                 confidences = page_result['rec_scores']
         
-        # Calcular confianza promedio
+        # NUEVO: Extraer coordenadas básicas
+        coordinates_list = []
+        if result and isinstance(result, list) and len(result) > 0:
+            page_result = result[0]
+            if 'dt_polys' in page_result:
+                coordinates_list = page_result['dt_polys']
+        
+        # Calcular estadísticas
         avg_confidence = sum(confidences) / len(confidences) if confidences else 0.0
         
-        return jsonify({
+        # Respuesta básica
+        response = {
             'success': True,
             'text': '\n'.join(text_lines),
             'total_blocks': len(text_lines),
             'filename': filename,
             'language': language,
             'avg_confidence': round(avg_confidence, 3) if avg_confidence > 0 else None,
-            'confidence_available': len(confidences) > 0
-        })
+            'has_coordinates': len(coordinates_list) > 0
+        }
+        
+        # Si piden detalle, agregar coordenadas y más info
+        if detailed:
+            blocks_with_coords = []
+            for i, text in enumerate(text_lines):
+                block_info = {'text': text}
+                
+                if i < len(confidences):
+                    block_info['confidence'] = round(confidences[i], 3)
+                
+                if i < len(coordinates_list):
+                    block_info['coordinates'] = coordinates_list[i].tolist() if hasattr(coordinates_list[i], 'tolist') else coordinates_list[i]
+                
+                blocks_with_coords.append(block_info)
+            
+            response.update({
+                'blocks': blocks_with_coords,
+                'min_confidence': round(min(confidences), 3) if confidences else None,
+                'max_confidence': round(max(confidences), 3) if confidences else None,
+                'total_coordinates': len(coordinates_list)
+            })
+        
+        return jsonify(response)
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -141,6 +171,22 @@ def process_file():
 if __name__ == '__main__':
     os.makedirs(UPLOAD_FOLDER, exist_ok=True)
     os.makedirs(OUTPUT_FOLDER, exist_ok=True)
-    print("🚀 PaddleOCR Simple Server iniciando...")
-    print("🔄 Volviendo al método .predict() que funcionaba")
+    
+    print("🚀 PaddleOCR Server iniciando...")
+    print("🔄 Pre-cargando modelos OCR (primera vez puede tardar 2-3 minutos)...")
+    
+    # OPCIÓN 1: Pre-cargar modelos al arrancar
+    if initialize_ocr():
+        print("✅ Modelos OCR pre-cargados exitosamente")
+        print("🎯 Las siguientes peticiones serán instantáneas")
+    else:
+        print("⚠️ Error pre-cargando modelos, se cargarán en primera petición")
+    
+    print("🌐 Servidor listo en puerto 8501")
+    print("📍 Funcionalidades:")
+    print("   ✅ Texto extraído")
+    print("   ✅ Coordenadas disponibles")
+    print("   ✅ Confianza/probabilidades")
+    print("   ✅ Modo detailed con parámetro 'detailed=true'")
+    
     app.run(host='0.0.0.0', port=8501, debug=False)
