@@ -47,6 +47,16 @@ def initialize_ocr():
         traceback.print_exc()
         return False
 
+def get_ocr_instance(language=None):
+    global ocr_instances, ocr_initialized
+    
+    if not ocr_initialized:
+        if not initialize_ocr():
+            return None
+    
+    lang = language or default_lang
+    return ocr_instances.get(lang, ocr_instances.get("es"))
+
 def detect_text_orientation(coordinates):
     """
     Detectar orientación del texto basándose en coordenadas
@@ -87,24 +97,6 @@ def analyze_text_orientations(coordinates_list):
         orientations[orientation] += 1
     
     return orientations
-
-def get_ocr_instance(language=None):
-    global ocr_instances, ocr_initialized
-    
-    if not ocr_initialized:
-        if not initialize_ocr():
-            return None
-    
-    lang = language or default_lang
-    return ocr_instances.get(lang, ocr_instances.get("es"))
-    global ocr_instances, ocr_initialized
-    
-    if not ocr_initialized:
-        if not initialize_ocr():
-            return None
-    
-    lang = language or default_lang
-    return ocr_instances.get(lang, ocr_instances.get("es"))
 
 @app.route('/health')
 def health():
@@ -173,14 +165,14 @@ def process_file():
             if 'rec_scores' in page_result:
                 confidences = page_result['rec_scores']
         
-        # NUEVO: Extraer coordenadas básicas
+        # Extraer coordenadas básicas
         coordinates_list = []
         if result and isinstance(result, list) and len(result) > 0:
             page_result = result[0]
             if 'dt_polys' in page_result:
                 coordinates_list = page_result['dt_polys']
         
-        # NUEVO: Analizar orientaciones de texto
+        # Analizar orientaciones de texto
         orientations = analyze_text_orientations(coordinates_list)
         
         # Calcular estadísticas
@@ -240,7 +232,7 @@ if __name__ == '__main__':
     print("🚀 PaddleOCR Server iniciando...")
     print("🔄 Pre-cargando modelos OCR (primera vez puede tardar 2-3 minutos)...")
     
-    # OPCIÓN 1: Pre-cargar modelos al arrancar
+    # Pre-cargar modelos al arrancar
     if initialize_ocr():
         print("✅ Modelos OCR pre-cargados exitosamente")
         print("🎯 Las siguientes peticiones serán instantáneas")
