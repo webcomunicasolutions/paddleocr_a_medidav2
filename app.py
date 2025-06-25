@@ -87,6 +87,16 @@ def analyze_text_orientations(coordinates_list):
         orientations[orientation] += 1
     
     return orientations
+
+def get_ocr_instance(language=None):
+    global ocr_instances, ocr_initialized
+    
+    if not ocr_initialized:
+        if not initialize_ocr():
+            return None
+    
+    lang = language or default_lang
+    return ocr_instances.get(lang, ocr_instances.get("es"))
     global ocr_instances, ocr_initialized
     
     if not ocr_initialized:
