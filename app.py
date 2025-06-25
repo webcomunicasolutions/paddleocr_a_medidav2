@@ -3,6 +3,7 @@ import os
 import json
 import time
 import tempfile
+import numpy as np
 from pathlib import Path
 from flask import Flask, request, jsonify
 from werkzeug.utils import secure_filename
@@ -28,14 +29,16 @@ def initialize_ocr():
         return True
     
     try:
-        print("🚀 Inicializando PaddleOCR (configuración SIMPLE)...")
+        print("🚀 Inicializando PaddleOCR con detección de orientación...")
         from paddleocr import PaddleOCR
         
-        ocr_instances["es"] = PaddleOCR(lang='es')
-        ocr_instances["en"] = PaddleOCR(lang='en')
+        # Configuración mejorada para detectar texto vertical
+        # use_angle_cls=True habilita detección de orientación (0°, 90°, 180°, 270°)
+        ocr_instances["es"] = PaddleOCR(lang='es', use_angle_cls=True)
+        ocr_instances["en"] = PaddleOCR(lang='en', use_angle_cls=True)
         
         ocr_initialized = True
-        print("✅ OCR inicializado exitosamente")
+        print("✅ OCR inicializado con detección de orientación")
         return True
         
     except Exception as e:
@@ -44,7 +47,46 @@ def initialize_ocr():
         traceback.print_exc()
         return False
 
-def get_ocr_instance(language=None):
+def detect_text_orientation(coordinates):
+    """
+    Detectar orientación del texto basándose en coordenadas
+    Retorna: 'horizontal', 'vertical', 'rotated'
+    """
+    try:
+        if len(coordinates) >= 4:
+            # Calcular dimensiones del rectángulo
+            x_coords = [point[0] for point in coordinates]
+            y_coords = [point[1] for point in coordinates]
+            
+            width = max(x_coords) - min(x_coords)
+            height = max(y_coords) - min(y_coords)
+            
+            # Calcular ángulo de rotación
+            p1, p2 = coordinates[0], coordinates[1]
+            angle = abs(np.arctan2(p2[1] - p1[1], p2[0] - p1[0]) * 180 / np.pi)
+            
+            # Clasificar orientación
+            if height > (width * 1.5):  # Texto claramente vertical
+                return 'vertical'
+            elif angle > 15 and angle < 165:  # Texto rotado
+                return 'rotated'
+            else:
+                return 'horizontal'
+    except:
+        pass
+    return 'horizontal'
+
+def analyze_text_orientations(coordinates_list):
+    """
+    Analizar todas las orientaciones de texto en el documento
+    """
+    orientations = {'horizontal': 0, 'vertical': 0, 'rotated': 0}
+    
+    for coords in coordinates_list:
+        orientation = detect_text_orientation(coords)
+        orientations[orientation] += 1
+    
+    return orientations
     global ocr_instances, ocr_initialized
     
     if not ocr_initialized:
@@ -128,6 +170,9 @@ def process_file():
             if 'dt_polys' in page_result:
                 coordinates_list = page_result['dt_polys']
         
+        # NUEVO: Analizar orientaciones de texto
+        orientations = analyze_text_orientations(coordinates_list)
+        
         # Calcular estadísticas
         avg_confidence = sum(confidences) / len(confidences) if confidences else 0.0
         
@@ -139,7 +184,10 @@ def process_file():
             'filename': filename,
             'language': language,
             'avg_confidence': round(avg_confidence, 3) if avg_confidence > 0 else None,
-            'has_coordinates': len(coordinates_list) > 0
+            'has_coordinates': len(coordinates_list) > 0,
+            'text_orientations': orientations,
+            'has_vertical_text': orientations.get('vertical', 0) > 0,
+            'has_rotated_text': orientations.get('rotated', 0) > 0
         }
         
         # Si piden detalle, agregar coordenadas y más info
@@ -152,7 +200,9 @@ def process_file():
                     block_info['confidence'] = round(confidences[i], 3)
                 
                 if i < len(coordinates_list):
-                    block_info['coordinates'] = coordinates_list[i].tolist() if hasattr(coordinates_list[i], 'tolist') else coordinates_list[i]
+                    coords = coordinates_list[i].tolist() if hasattr(coordinates_list[i], 'tolist') else coordinates_list[i]
+                    block_info['coordinates'] = coords
+                    block_info['orientation'] = detect_text_orientation(coords)
                 
                 blocks_with_coords.append(block_info)
             
@@ -160,7 +210,12 @@ def process_file():
                 'blocks': blocks_with_coords,
                 'min_confidence': round(min(confidences), 3) if confidences else None,
                 'max_confidence': round(max(confidences), 3) if confidences else None,
-                'total_coordinates': len(coordinates_list)
+                'total_coordinates': len(coordinates_list),
+                'orientation_details': {
+                    'horizontal_blocks': orientations.get('horizontal', 0),
+                    'vertical_blocks': orientations.get('vertical', 0),
+                    'rotated_blocks': orientations.get('rotated', 0)
+                }
             })
         
         return jsonify(response)
@@ -187,6 +242,8 @@ if __name__ == '__main__':
     print("   ✅ Texto extraído")
     print("   ✅ Coordenadas disponibles")
     print("   ✅ Confianza/probabilidades")
+    print("   ✅ Detección de texto vertical")
+    print("   ✅ Detección de texto rotado")
     print("   ✅ Modo detailed con parámetro 'detailed=true'")
     
     app.run(host='0.0.0.0', port=8501, debug=False)
