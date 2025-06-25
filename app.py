@@ -45,10 +45,10 @@ def initialize_ocr():
         return True
     
     try:
-        print("🚀 Inicializando PaddleOCR (configuración estable)...")
+        print("🚀 Inicializando PaddleOCR 3.0.2...")
         from paddleocr import PaddleOCR
         
-        # VOLVER A LA CONFIGURACIÓN QUE FUNCIONABA
+        # Configuración SIMPLE que funciona
         ocr_instances["es"] = PaddleOCR(lang='es')
         ocr_instances["en"] = PaddleOCR(lang='en')
         
@@ -155,56 +155,28 @@ def process_file():
             file.save(tmp_file.name)
             
             try:
-                if filename.lower().endswith('.pdf'):
-                    from pdf2image import convert_from_path
-                    pages = convert_from_path(tmp_file.name, dpi=300, first_page=1, last_page=1)
-                    with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as img_tmp:
-                        pages[0].save(img_tmp.name, 'JPEG', quality=95)
-                        
-                        # MEJORA: Calcular side_len inteligente 
-                        side_len = calculate_intelligent_side_len(img_tmp.name)
-                        
-                        # VOLVER AL MÉTODO QUE FUNCIONABA: .ocr() simple
-                        result = ocr.ocr(img_tmp.name)
-                        os.remove(img_tmp.name)
-                else:
-                    # Para imágenes directas
-                    side_len = calculate_intelligent_side_len(tmp_file.name)
-                    result = ocr.ocr(tmp_file.name)
+                # NUEVO: OCR directo con .predict() (funciona para PDF e imágenes)
+                print(f"🔍 Procesando {filename} con PaddleOCR 3.0.2...")
+                result = ocr.predict(tmp_file.name)
+                print(f"✅ OCR completado")
                 
             finally:
                 os.remove(tmp_file.name)
         
-        # VOLVER AL PROCESAMIENTO QUE FUNCIONABA
-        text_lines = []
-        confidences = []
-        coordinates_list = []
+        # Extraer datos del resultado usando la estructura que funciona
+        if not result or len(result) == 0:
+            return jsonify({
+                'success': False,
+                'error': 'No OCR result',
+                'processing_time': time.time() - start_time
+            })
         
-        if result and isinstance(result, list):
-            for page_result in result:
-                if not page_result:
-                    continue
-                    
-                for word_info in page_result:
-                    try:
-                        if len(word_info) >= 2:
-                            coordinates = word_info[0]
-                            text_data = word_info[1]
-                            
-                            if isinstance(text_data, (list, tuple)) and len(text_data) >= 2:
-                                text = str(text_data[0]).strip()
-                                confidence = float(text_data[1])
-                                
-                                if text:
-                                    text_lines.append(text)
-                                    confidences.append(confidence)
-                                    coordinates_list.append(coordinates)
-                                    
-                    except Exception as e:
-                        print(f"⚠️ Error procesando palabra: {e}")
-                        continue
+        page_result = result[0]
+        text_lines = page_result.get('rec_texts', [])
+        confidences = page_result.get('rec_scores', [])
+        coordinates_list = page_result.get('dt_polys', [])
         
-        # MEJORA: Analizar orientaciones
+        # Analizar orientaciones
         orientations = analyze_text_orientations(coordinates_list)
         
         # Estadísticas
@@ -224,7 +196,8 @@ def process_file():
             'text_orientations': orientations,
             'has_vertical_text': orientations.get('vertical', 0) > 0,
             'has_rotated_text': orientations.get('rotated', 0) > 0,
-            'side_len_used': side_len if 'side_len' in locals() else 'default'
+            'ocr_version': '3.0.2',
+            'pdf_support': 'native'
         }
         
         # Modo detallado
@@ -261,6 +234,9 @@ def process_file():
         
     except Exception as e:
         processing_time = time.time() - start_time
+        print(f"❌ Error: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({
             'error': str(e),
             'processing_time': round(processing_time, 3)
@@ -270,7 +246,7 @@ if __name__ == '__main__':
     os.makedirs(UPLOAD_FOLDER, exist_ok=True)
     os.makedirs(OUTPUT_FOLDER, exist_ok=True)
     
-    print("🚀 PaddleOCR Server iniciando...")
+    print("🚀 PaddleOCR 3.0.2 Server iniciando...")
     print("🔄 Pre-cargando modelos OCR...")
     
     if initialize_ocr():
@@ -281,9 +257,10 @@ if __name__ == '__main__':
     
     print("🌐 Servidor listo en puerto 8501")
     print("📍 Funcionalidades:")
-    print("   ✅ Configuración estable que funciona")
-    print("   ✅ Side_len inteligente agregado")
-    print("   ✅ Detección de orientación mejorada")
+    print("   ✅ PaddleOCR 3.0.2 nativo")
+    print("   ✅ Soporte PDF directo")
+    print("   ✅ Método .predict() estable")
+    print("   ✅ Detección de orientación")
     print("   ✅ Coordenadas y confianza")
     
     app.run(host='0.0.0.0', port=8501, debug=False)
