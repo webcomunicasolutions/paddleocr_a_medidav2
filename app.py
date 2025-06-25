@@ -35,7 +35,7 @@ def calculate_intelligent_side_len(image_path):
         
         h, w = img.shape[:2]
         side_len = int(math.ceil(max(h, w) * max(0.8, 960 / max(h, w))))
-        print(f"📐 Imagen {w}x{h} -> side_len calculado: {side_len}px")
+        print(f"📐 Imagen {w}x{h} -> side_len: {side_len}px")
         return side_len
     except:
         return 960
@@ -47,65 +47,64 @@ def initialize_ocr():
         return True
     
     try:
-        print("🚀 Inicializando PaddleOCR v4 con configuración avanzada...")
+        print("🚀 Inicializando PaddleOCR con configuración híbrida...")
         from paddleocr import PaddleOCR
         
-        # Configuración para ESPAÑOL (PP-OCRv4)
-        print("📚 Cargando OCR para ESPAÑOL...")
-        ocr_instances["es"] = PaddleOCR(
-            ocr_version='PP-OCRv4',
-            det_model_dir='en_PP-OCRv4_server_det',        # Detector v4
-            rec_model_dir='es_PP-OCRv4_server_rec',        # Reconocedor español v4
-            cls_model_dir='ch_ppocr_server_v2.0_cls_infer', # Clasificador de ángulos
-            lang='es',
-            use_angle_cls=True,                            # Detección de ángulos
-            use_textline_orientation=True,                 # Orientación de líneas
-            use_doc_orientation_classify=False,            # No clasificar documento completo
-            use_doc_unwarping=False,                       # No enderezar documento
-            det_db_box_thresh=0.3,                        # Umbral de detección de cajas
-            det_db_thresh=0.25,                           # Umbral de segmentación
-            enable_mkldnn=True,                           # Optimización CPU
-            use_gpu=False,                                # CPU por ahora
-            show_log=False                                # Sin logs verbosos
-        )
-        
-        # Configuración para INGLÉS (PP-OCRv4)
-        print("📚 Cargando OCR para INGLÉS...")
-        ocr_instances["en"] = PaddleOCR(
-            ocr_version='PP-OCRv4',
-            det_model_dir='en_PP-OCRv4_server_det',
-            rec_model_dir='en_PP-OCRv4_server_rec',        # Reconocedor inglés v4
-            cls_model_dir='ch_ppocr_server_v2.0_cls_infer',
-            lang='en',
-            use_angle_cls=True,
-            use_textline_orientation=True,
-            use_doc_orientation_classify=False,
-            use_doc_unwarping=False,
-            det_db_box_thresh=0.3,
-            det_db_thresh=0.25,
-            enable_mkldnn=True,
-            use_gpu=False,
-            show_log=False
-        )
+        # ESTRATEGIA: Intentar v4 primero, fallback a configuración estable
+        for lang in supported_languages:
+            print(f"📚 Cargando OCR para {lang.upper()}...")
+            
+            try:
+                # INTENTO 1: Configuración avanzada como tu amigo
+                print(f"   🔄 Intentando configuración avanzada para {lang}...")
+                ocr_instances[lang] = PaddleOCR(
+                    lang=lang,
+                    use_angle_cls=True,
+                    use_textline_orientation=True,
+                    det_db_box_thresh=0.3,
+                    det_db_thresh=0.25,
+                    enable_mkldnn=True,
+                    use_gpu=False,
+                    show_log=False
+                )
+                print(f"   ✅ Configuración avanzada OK para {lang}")
+                
+            except Exception as e1:
+                print(f"   ⚠️ Configuración avanzada falló para {lang}: {e1}")
+                try:
+                    # INTENTO 2: Configuración básica que sabemos que funciona
+                    print(f"   🔄 Fallback a configuración básica para {lang}...")
+                    ocr_instances[lang] = PaddleOCR(
+                        lang=lang,
+                        use_angle_cls=True
+                    )
+                    print(f"   ✅ Configuración básica OK para {lang}")
+                    
+                except Exception as e2:
+                    print(f"   ❌ También falló configuración básica para {lang}: {e2}")
+                    # INTENTO 3: Configuración mínima
+                    print(f"   🔄 Fallback a configuración mínima para {lang}...")
+                    ocr_instances[lang] = PaddleOCR(lang=lang)
+                    print(f"   ✅ Configuración mínima OK para {lang}")
         
         ocr_initialized = True
-        print("✅ OCR v4 inicializado con modelos avanzados")
+        print("✅ OCR inicializado exitosamente")
         
-        # Mostrar modelos cargados como hace tu amigo
+        # Mostrar configuración final
         for lang, ocr_instance in ocr_instances.items():
-            args = ocr_instance.args
-            print(f"""
-🔧 Modelos cargados para {lang.upper()}:
-─────────────────────────────────────────
-  Detector   : {args.det_model_dir}
-  Recognizer : {args.rec_model_dir}
-  Classifier : {args.cls_model_dir}
-─────────────────────────────────────────""")
+            try:
+                args = ocr_instance.args
+                print(f"""
+🔧 OCR {lang.upper()} configurado:
+  use_angle_cls: {getattr(args, 'use_angle_cls', 'N/A')}
+  det_limit_side_len: {getattr(args, 'det_limit_side_len', 'N/A')}""")
+            except:
+                print(f"🔧 OCR {lang.upper()} configurado (info limitada)")
         
         return True
         
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"❌ Error completo: {e}")
         import traceback
         traceback.print_exc()
         return False
@@ -120,9 +119,9 @@ def get_ocr_instance(language=None):
     lang = language or default_lang
     return ocr_instances.get(lang, ocr_instances.get("es"))
 
-def detect_text_orientation(coordinates):
+def detect_text_orientation_improved(coordinates):
     """
-    Detectar orientación del texto (mejorado)
+    Detección mejorada de orientación basada en el código de tu amigo
     """
     try:
         if len(coordinates) >= 4:
@@ -132,18 +131,23 @@ def detect_text_orientation(coordinates):
             width = max(x_coords) - min(x_coords)
             height = max(y_coords) - min(y_coords)
             
-            # Cálculo de ángulo más preciso
+            # Evitar división por cero
+            if width == 0:
+                return 'vertical'
+            
+            # Ratio altura/ancho
+            aspect_ratio = height / width
+            
+            # Cálculo de ángulo más robusto
             p1, p2 = coordinates[0], coordinates[1]
             angle = abs(np.arctan2(p2[1] - p1[1], p2[0] - p1[0]) * 180 / np.pi)
             
-            # Lógica mejorada de clasificación
-            aspect_ratio = height / width if width > 0 else 0
-            
-            if aspect_ratio > 2.0:  # Muy vertical
+            # Lógica mejorada
+            if aspect_ratio > 2.5:  # Claramente vertical
                 return 'vertical'
-            elif angle > 20 and angle < 160:  # Claramente rotado
+            elif angle > 25 and angle < 155:  # Rotación significativa
                 return 'rotated'
-            elif aspect_ratio > 1.5:  # Posiblemente vertical
+            elif aspect_ratio > 1.8:  # Posiblemente vertical
                 return 'vertical'
             else:
                 return 'horizontal'
@@ -153,19 +157,19 @@ def detect_text_orientation(coordinates):
 
 def analyze_text_orientations(coordinates_list):
     """
-    Analizar orientaciones con mejor precisión
+    Análisis mejorado de orientaciones
     """
     orientations = {'horizontal': 0, 'vertical': 0, 'rotated': 0}
     
     for coords in coordinates_list:
-        orientation = detect_text_orientation(coords)
+        orientation = detect_text_orientation_improved(coords)
         orientations[orientation] += 1
     
     return orientations
 
-def process_ocr_result_v4(ocr_result):
+def process_ocr_result_hybrid(ocr_result):
     """
-    Procesar resultado de OCR v4 con el formato mejorado
+    Procesamiento híbrido que funciona con diferentes formatos de resultado
     """
     text_lines = []
     confidences = []
@@ -175,13 +179,13 @@ def process_ocr_result_v4(ocr_result):
         return text_lines, confidences, coordinates_list
     
     try:
+        # MÉTODO 1: Formato estándar de .ocr()
         for page_result in ocr_result:
             if not page_result:
                 continue
                 
             for word_info in page_result:
                 try:
-                    # Formato OCR v4: [coordenadas, (texto, confianza)]
                     if len(word_info) >= 2:
                         coordinates = word_info[0]
                         text_data = word_info[1]
@@ -190,7 +194,7 @@ def process_ocr_result_v4(ocr_result):
                             text = str(text_data[0]).strip()
                             confidence = float(text_data[1])
                             
-                            if text:  # Solo agregar si hay texto
+                            if text:
                                 text_lines.append(text)
                                 confidences.append(confidence)
                                 coordinates_list.append(coordinates)
@@ -198,6 +202,20 @@ def process_ocr_result_v4(ocr_result):
                 except Exception as e:
                     print(f"⚠️ Error procesando palabra: {e}")
                     continue
+        
+        # Si no encontramos nada, intentar formato de .predict()
+        if not text_lines and ocr_result:
+            try:
+                page_result = ocr_result[0]
+                if isinstance(page_result, dict):
+                    if 'rec_texts' in page_result:
+                        text_lines = page_result['rec_texts']
+                    if 'rec_scores' in page_result:
+                        confidences = page_result['rec_scores']
+                    if 'dt_polys' in page_result:
+                        coordinates_list = page_result['dt_polys']
+            except:
+                pass
                     
     except Exception as e:
         print(f"⚠️ Error procesando resultado OCR: {e}")
@@ -206,7 +224,11 @@ def process_ocr_result_v4(ocr_result):
 
 @app.route('/health')
 def health():
-    return jsonify({'status': 'healthy', 'ocr_ready': ocr_initialized, 'version': 'PP-OCRv4'})
+    return jsonify({
+        'status': 'healthy' if ocr_initialized else 'initializing',
+        'ocr_ready': ocr_initialized,
+        'supported_languages': supported_languages
+    })
 
 @app.route('/init')
 def init_models():
@@ -214,8 +236,7 @@ def init_models():
         success = initialize_ocr()
         return jsonify({
             'success': success,
-            'models_loaded': list(ocr_instances.keys()) if success else [],
-            'version': 'PP-OCRv4'
+            'models_loaded': list(ocr_instances.keys()) if success else []
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -258,29 +279,35 @@ def process_file():
                         # Calcular side_len inteligente
                         side_len = calculate_intelligent_side_len(img_tmp.name)
                         
-                        # Actualizar configuración dinámicamente
-                        ocr.args.det_limit_side_len = side_len
+                        # Intentar actualizar side_len si es posible
+                        try:
+                            ocr.args.det_limit_side_len = side_len
+                        except:
+                            print(f"⚠️ No se pudo actualizar side_len, usando default")
                         
-                        # OCR v4 con cls=True
+                        # OCR con detección de ángulos
                         result = ocr.ocr(img_tmp.name, cls=True)
                         os.remove(img_tmp.name)
                 else:
-                    # Calcular side_len para imagen
+                    # Para imágenes directas
                     side_len = calculate_intelligent_side_len(tmp_file.name)
-                    ocr.args.det_limit_side_len = side_len
+                    try:
+                        ocr.args.det_limit_side_len = side_len
+                    except:
+                        pass
                     
                     result = ocr.ocr(tmp_file.name, cls=True)
                 
             finally:
                 os.remove(tmp_file.name)
         
-        # Procesar resultado con nuevo formato
-        text_lines, confidences, coordinates_list = process_ocr_result_v4(result)
+        # Procesar resultado con método híbrido
+        text_lines, confidences, coordinates_list = process_ocr_result_hybrid(result)
         
         # Analizar orientaciones
         orientations = analyze_text_orientations(coordinates_list)
         
-        # Calcular estadísticas
+        # Estadísticas
         avg_confidence = sum(confidences) / len(confidences) if confidences else 0.0
         processing_time = time.time() - start_time
         
@@ -293,7 +320,6 @@ def process_file():
             'language': language,
             'avg_confidence': round(avg_confidence, 3) if avg_confidence > 0 else None,
             'processing_time': round(processing_time, 3),
-            'ocr_version': 'PP-OCRv4',
             'has_coordinates': len(coordinates_list) > 0,
             'text_orientations': orientations,
             'has_vertical_text': orientations.get('vertical', 0) > 0,
@@ -311,8 +337,11 @@ def process_file():
                 
                 if i < len(coordinates_list):
                     coords = coordinates_list[i]
+                    # Convertir numpy array si es necesario
+                    if hasattr(coords, 'tolist'):
+                        coords = coords.tolist()
                     block_info['coordinates'] = coords
-                    block_info['orientation'] = detect_text_orientation(coords)
+                    block_info['orientation'] = detect_text_orientation_improved(coords)
                 
                 blocks_with_coords.append(block_info)
             
@@ -341,23 +370,21 @@ if __name__ == '__main__':
     os.makedirs(UPLOAD_FOLDER, exist_ok=True)
     os.makedirs(OUTPUT_FOLDER, exist_ok=True)
     
-    print("🚀 PaddleOCR v4 Server iniciando...")
-    print("🔄 Pre-cargando modelos OCR v4 (primera vez puede tardar 3-5 minutos)...")
+    print("🚀 PaddleOCR Híbrido Server iniciando...")
+    print("🔄 Pre-cargando modelos OCR...")
     
-    # Pre-cargar modelos al arrancar
+    # Pre-cargar modelos
     if initialize_ocr():
-        print("✅ Modelos OCR v4 pre-cargados exitosamente")
+        print("✅ Modelos pre-cargados exitosamente")
         print("🎯 Las siguientes peticiones serán instantáneas")
     else:
-        print("⚠️ Error pre-cargando modelos, se cargarán en primera petición")
+        print("⚠️ Error pre-cargando modelos")
     
     print("🌐 Servidor listo en puerto 8501")
-    print("📍 Funcionalidades PP-OCRv4:")
-    print("   ✅ Modelos v4 más precisos")
-    print("   ✅ Side_len inteligente automático")
+    print("📍 Funcionalidades híbridas:")
+    print("   ✅ Configuración adaptativa (avanzada + fallback)")
+    print("   ✅ Side_len inteligente")
     print("   ✅ Detección de orientación mejorada")
-    print("   ✅ Coordenadas exactas")
-    print("   ✅ Confianza por bloque")
-    print("   ✅ Optimización CPU (MKLDNN)")
+    print("   ✅ Procesamiento híbrido de resultados")
     
     app.run(host='0.0.0.0', port=8501, debug=False)
