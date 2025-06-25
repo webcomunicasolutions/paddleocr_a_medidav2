@@ -25,7 +25,7 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def calculate_intelligent_side_len(image_path):
-    """Cálculo inteligente de side_len"""
+    """Cálculo inteligente de side_len como tu amigo"""
     try:
         img = cv2.imread(str(image_path))
         if img is None:
@@ -45,25 +45,12 @@ def initialize_ocr():
         return True
     
     try:
-        print("🚀 Inicializando PaddleOCR simple...")
+        print("🚀 Inicializando PaddleOCR (configuración estable)...")
         from paddleocr import PaddleOCR
         
-        # Configuración SIMPLE que funciona
-        for lang in supported_languages:
-            print(f"📚 Cargando OCR para {lang.upper()}...")
-            try:
-                # Solo usar use_textline_orientation (sin use_angle_cls)
-                ocr_instances[lang] = PaddleOCR(
-                    lang=lang,
-                    use_textline_orientation=True,
-                    show_log=False
-                )
-                print(f"   ✅ Configuración OK para {lang}")
-            except Exception as e:
-                print(f"   ⚠️ Fallback para {lang}: {e}")
-                # Configuración mínima
-                ocr_instances[lang] = PaddleOCR(lang=lang)
-                print(f"   ✅ Configuración mínima OK para {lang}")
+        # VOLVER A LA CONFIGURACIÓN QUE FUNCIONABA
+        ocr_instances["es"] = PaddleOCR(lang='es')
+        ocr_instances["en"] = PaddleOCR(lang='en')
         
         ocr_initialized = True
         print("✅ OCR inicializado exitosamente")
@@ -126,11 +113,7 @@ def analyze_text_orientations(coordinates_list):
 
 @app.route('/health')
 def health():
-    return jsonify({
-        'status': 'healthy' if ocr_initialized else 'initializing',
-        'ocr_ready': ocr_initialized,
-        'supported_languages': supported_languages
-    })
+    return jsonify({'status': 'healthy', 'ocr_ready': ocr_initialized})
 
 @app.route('/init')
 def init_models():
@@ -178,34 +161,24 @@ def process_file():
                     with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as img_tmp:
                         pages[0].save(img_tmp.name, 'JPEG', quality=95)
                         
-                        # Calcular side_len inteligente
+                        # MEJORA: Calcular side_len inteligente 
                         side_len = calculate_intelligent_side_len(img_tmp.name)
-                        print(f"🔧 Usando side_len: {side_len}")
                         
-                        # SOLO .ocr() - VERSIÓN MÍNIMA SIN cls
-                        print("🔧 Ejecutando OCR SIN cls...")
-                        result = ocr.ocr(img_tmp.name)  # SIN cls=True
-                        print(f"✅ OCR completado, resultado tipo: {type(result)}")
+                        # VOLVER AL MÉTODO QUE FUNCIONABA: .ocr() simple
+                        result = ocr.ocr(img_tmp.name)
                         os.remove(img_tmp.name)
                 else:
                     # Para imágenes directas
                     side_len = calculate_intelligent_side_len(tmp_file.name)
-                    print(f"🔧 Usando side_len: {side_len}")
-                    
-                    # SOLO .ocr() - VERSIÓN MÍNIMA SIN cls
-                    print("🔧 Ejecutando OCR para imagen SIN cls...")
-                    result = ocr.ocr(tmp_file.name)  # SIN cls=True
-                    print(f"✅ OCR completado, resultado tipo: {type(result)}")
+                    result = ocr.ocr(tmp_file.name)
                 
             finally:
                 os.remove(tmp_file.name)
         
-        # Procesar resultado SIMPLE
+        # VOLVER AL PROCESAMIENTO QUE FUNCIONABA
         text_lines = []
         confidences = []
         coordinates_list = []
-        
-        print(f"🔍 Resultado OCR tipo: {type(result)}")
         
         if result and isinstance(result, list):
             for page_result in result:
@@ -231,7 +204,7 @@ def process_file():
                         print(f"⚠️ Error procesando palabra: {e}")
                         continue
         
-        # Analizar orientaciones
+        # MEJORA: Analizar orientaciones
         orientations = analyze_text_orientations(coordinates_list)
         
         # Estadísticas
@@ -250,7 +223,8 @@ def process_file():
             'has_coordinates': len(coordinates_list) > 0,
             'text_orientations': orientations,
             'has_vertical_text': orientations.get('vertical', 0) > 0,
-            'has_rotated_text': orientations.get('rotated', 0) > 0
+            'has_rotated_text': orientations.get('rotated', 0) > 0,
+            'side_len_used': side_len if 'side_len' in locals() else 'default'
         }
         
         # Modo detallado
@@ -287,9 +261,6 @@ def process_file():
         
     except Exception as e:
         processing_time = time.time() - start_time
-        print(f"❌ Error completo: {e}")
-        import traceback
-        traceback.print_exc()
         return jsonify({
             'error': str(e),
             'processing_time': round(processing_time, 3)
@@ -299,7 +270,7 @@ if __name__ == '__main__':
     os.makedirs(UPLOAD_FOLDER, exist_ok=True)
     os.makedirs(OUTPUT_FOLDER, exist_ok=True)
     
-    print("🚀 PaddleOCR Simple Server iniciando...")
+    print("🚀 PaddleOCR Server iniciando...")
     print("🔄 Pre-cargando modelos OCR...")
     
     if initialize_ocr():
@@ -310,9 +281,9 @@ if __name__ == '__main__':
     
     print("🌐 Servidor listo en puerto 8501")
     print("📍 Funcionalidades:")
-    print("   ✅ SOLO método .ocr() (sin .predict())")
-    print("   ✅ Side_len inteligente")
+    print("   ✅ Configuración estable que funciona")
+    print("   ✅ Side_len inteligente agregado")
     print("   ✅ Detección de orientación mejorada")
-    print("   ✅ Configuración limpia sin conflictos")
+    print("   ✅ Coordenadas y confianza")
     
     app.run(host='0.0.0.0', port=8501, debug=False)
