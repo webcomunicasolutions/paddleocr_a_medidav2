@@ -1,49 +1,40 @@
 FROM python:3.10-slim
 
 ENV PYTHONUNBUFFERED=1
-ENV PADDLE_HOME=/opt/paddle_models
-ENV OMP_NUM_THREADS=1
-ENV KMP_DUPLICATE_LIB_OK=TRUE
+ENV PADDLE_PDX_MODEL_SOURCE=HuggingFace
+ENV OMP_NUM_THREADS=4
+ENV MKL_NUM_THREADS=4
 
-# Dependencias del sistema
+# Dependencias del sistema específicas para PaddleOCR 3.0.2
 RUN apt-get update && apt-get install -y \
     gcc g++ make cmake \
+    gfortran \
     libopenblas-dev liblapack-dev \
     libgl1-mesa-glx libglib2.0-0 libsm6 libxext6 libxrender-dev \
-    libgomp1 \
+    libgomp1 libgtk2.0-dev \
     poppler-utils curl wget \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Instalar dependencias en orden específico para PaddleOCR 3.0
+# Instalar PaddlePaddle 3.0.0 (CRÍTICO para PaddleOCR 3.0.2)
 RUN pip install --no-cache-dir --upgrade pip
+RUN pip install --no-cache-dir paddlepaddle==3.0.0
 
-# Primero las dependencias base
-RUN pip install --no-cache-dir \
-    numpy==1.24.3 \
-    opencv-python-headless==4.8.1.78 \
-    Pillow==10.0.1
-
-# PaddlePaddle 3.0 estable
-RUN pip install --no-cache-dir \
-    paddlepaddle==3.0.0b1
-
-# PaddleOCR 3.0 compatible  
-RUN pip install --no-cache-dir \
-    paddleocr==3.0.1
+# Instalar PaddleOCR 3.0.2 ESTABLE
+RUN pip install --no-cache-dir paddleocr==3.0.2
 
 # Otras dependencias
 RUN pip install --no-cache-dir \
     pdf2image==1.17.0 \
     flask==3.0.0 \
-    gunicorn==21.2.0
+    Pillow==10.0.1
 
 # Copiar código
 COPY . /app/
 
 # Crear directorios
-RUN mkdir -p /app/data/input /app/data/output /opt/paddle_models /root/.paddlex
+RUN mkdir -p /app/data/input /app/data/output /root/.paddleocr
 
 EXPOSE 8501
 HEALTHCHECK --interval=30s --timeout=10s --start-period=180s \
